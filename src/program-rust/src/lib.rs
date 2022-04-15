@@ -3,6 +3,7 @@ use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint,
     entrypoint::ProgramResult,
+    log::sol_log_compute_units,
     msg,
     program_error::ProgramError,
     pubkey::Pubkey,
@@ -12,7 +13,7 @@ use solana_program::{
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct GreetingAccount {
     /// number of greetings
-    pub counter: u32,
+    pub txt: String,
 }
 
 // Declare and export the program's entrypoint
@@ -22,7 +23,7 @@ entrypoint!(process_instruction);
 pub fn process_instruction(
     program_id: &Pubkey, // Public key of the account the hello world program was loaded into
     accounts: &[AccountInfo], // The account to say hello to
-    _instruction_data: &[u8], // Ignored, all helloworld instructions are hellos
+    instruction_data: &[u8], // Ignored, all helloworld instructions are hellos
 ) -> ProgramResult {
     msg!("Hello World Rust program entrypoint");
 
@@ -38,12 +39,19 @@ pub fn process_instruction(
         return Err(ProgramError::IncorrectProgramId);
     }
 
-    // Increment and store the number of times the account has been greeted
-    let mut greeting_account = GreetingAccount::try_from_slice(&account.data.borrow())?;
-    greeting_account.counter += 1;
-    greeting_account.serialize(&mut &mut account.data.borrow_mut()[..])?;
+    msg!("Start instruction decode");
+    let message = GreetingAccount::try_from_slice(instruction_data).map_err(|err| {
+        msg!("Receiving message as string utf8 failed, {:?}", err);
+        ProgramError::InvalidInstructionData
+    })?;
+    msg!("Greeting passed to program is {:?}", message);
 
-    msg!("Greeted {} time(s)!", greeting_account.counter);
+    let data = &mut &mut account.data.borrow_mut();
+    msg!("Start save instruction into data");
+    data[..instruction_data.len()].copy_from_slice(&instruction_data);
+
+    sol_log_compute_units();
+    msg!("Was sent message {}!", message.txt);
 
     Ok(())
 }

@@ -60,10 +60,10 @@ const PROGRAM_KEYPAIR_PATH = path.join(PROGRAM_PATH, 'helloworld-keypair.json');
  * The state of a greeting account managed by the hello world program
  */
 class GreetingAccount {
-  counter = 0;
-  constructor(fields: {counter: number} | undefined = undefined) {
+  txt = '';
+  constructor(fields: {txt: string} | undefined = undefined) {
     if (fields) {
-      this.counter = fields.counter;
+      this.txt = fields.txt;
     }
   }
 }
@@ -72,16 +72,19 @@ class GreetingAccount {
  * Borsh schema definition for greeting accounts
  */
 const GreetingSchema = new Map([
-  [GreetingAccount, {kind: 'struct', fields: [['counter', 'u32']]}],
+  [GreetingAccount, {kind: 'struct', fields: [['txt', 'String']]}],
 ]);
 
 /**
  * The expected size of each greeting account.
  */
+const sampleGreeter = new GreetingAccount();
+sampleGreeter.txt = '00000000000000000';
 const GREETING_SIZE = borsh.serialize(
   GreetingSchema,
-  new GreetingAccount(),
+  sampleGreeter,
 ).length;
+console.log('Greeting account size', GREETING_SIZE);
 
 /**
  * Establish a connection to the cluster
@@ -198,12 +201,14 @@ export async function checkProgram(): Promise<void> {
 /**
  * Say hello
  */
-export async function sayHello(): Promise<void> {
+export async function sayHello(msg: string): Promise<void> {
   console.log('Saying hello to', greetedPubkey.toBase58());
+  const messageAccount = new GreetingAccount();
+  messageAccount.txt = msg;
   const instruction = new TransactionInstruction({
     keys: [{pubkey: greetedPubkey, isSigner: false, isWritable: true}],
     programId,
-    data: Buffer.alloc(0), // All instructions are hellos
+    data: Buffer.from(borsh.serialize(GreetingSchema, messageAccount)), // All instructions are hellos
   });
   await sendAndConfirmTransaction(
     connection,
@@ -220,15 +225,15 @@ export async function reportGreetings(): Promise<void> {
   if (accountInfo === null) {
     throw 'Error: cannot find the greeted account';
   }
-  const greeting = borsh.deserialize(
+  const greeting: GreetingAccount = borsh.deserialize(
     GreetingSchema,
     GreetingAccount,
     accountInfo.data,
   );
   console.log(
+    'Account',
     greetedPubkey.toBase58(),
-    'has been greeted',
-    greeting.counter,
-    'time(s)',
+    'has been sent message',
+    greeting.txt,
   );
 }
